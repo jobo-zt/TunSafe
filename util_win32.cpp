@@ -152,7 +152,7 @@ uint8* LoadFileSane(const char *name, size_t *size) {
   FILE *f = fopen(name, "rb");
   uint8 *new_file = NULL, *file = NULL;
   size_t j, i, n;
-  if (!f) return false;
+  if (!f) return NULL;
   fseek(f, 0, SEEK_END);
   long x = ftell(f);
   fseek(f, 0, SEEK_SET);
