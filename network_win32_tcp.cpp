@@ -83,30 +83,71 @@ void TcpSocketWin32::DoConnect() {
   assert(rc == 0);
 
   // ConnectEx requires the socket to be bound
-  sockaddr_in sin = {0};
-  sin.sin_family = AF_INET;
-  sin.sin_addr.s_addr = INADDR_ANY;
-  sin.sin_port = 0;
-  if (bind(socket_, (sockaddr*)&sin, sizeof(sin))) {
-    RERROR("TcpSocketWin32::DoConnect bind failed: %d", WSAGetLastError());
-    CloseSocket();
-    return;
-  }
 
-  char buf[kSizeOfAddress];
-  RINFO("Connecting to tcp://%s...", PrintIpAddr(endpoint_, buf));
-
-  state_ = STATE_CONNECTING;
-  ClearOverlapped(&connect_overlapped_.overlapped);
-  connect_overlapped_.queue_cb = this;
-  if (!ConnectEx(socket_, (const sockaddr*)&endpoint_.sin, sizeof(endpoint_.sin), NULL, 0, NULL, &connect_overlapped_.overlapped)) {
-    int err = WSAGetLastError();
-    if (err != ERROR_IO_PENDING) {
-      RERROR("ConnectEx failed: %d", err);
+  // IPv4
+  if (endpoint_.sin_family == AF_INET) {
+    sockaddr_in sin = { 0 };
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = INADDR_ANY;
+    sin.sin_port = 0;
+    if (bind(socket_, (struct sockaddr*)&sin, sizeof(sin)) != 0) {
+      RERROR("TcpSocketWin32::DoConnect bind failed: %d", WSAGetLastError());
       CloseSocket();
       return;
     }
   }
+  // IPv6
+  else {
+    sockaddr_in6 sin6 = { 0 };
+    sin6.sin6_family = AF_INET6;
+    sin6.sin6_addr = in6addr_any;
+    sin6.sin6_port = 0;
+    if (bind(socket_, (struct sockaddr*)&sin6, sizeof(sin6)) != 0) {
+      RERROR("TcpSocketWin32::DoConnect (IPv6) bind failed: %d", WSAGetLastError());
+      CloseSocket();
+      return;
+    }
+  }
+  
+
+  char buf[kSizeOfAddress];
+  
+  // IPv4
+  if (endpoint_.sin_family == AF_INET) {
+    // RINFO("Connecting to tcp://%s...", PrintIpAddr(endpoint_, buf));
+    RINFO("Connecting to tcp://%s:%d...", PrintIpAddr(endpoint_, buf), htons(endpoint_.sin.sin_port));
+  }
+  // IPv6
+  else {
+    RINFO("Connecting to tcp://[%s]:%d...", PrintIpAddr(endpoint_, buf), htons(endpoint_.sin6.sin6_port));
+  }
+
+  state_ = STATE_CONNECTING;
+  ClearOverlapped(&connect_overlapped_.overlapped);
+  connect_overlapped_.queue_cb = this;
+  // IPv4
+  if (endpoint_.sin_family == AF_INET) {
+    if (!ConnectEx(socket_, (const sockaddr*)&endpoint_.sin, sizeof(endpoint_.sin), NULL, 0, NULL, &connect_overlapped_.overlapped)) {
+      int err = WSAGetLastError();
+      if (err != ERROR_IO_PENDING) {
+        RERROR("ConnectEx failed: %d", err);
+        CloseSocket();
+        return;
+      }
+    }
+  }
+  // IPv6
+  else {
+    if (!ConnectEx(socket_, (const sockaddr*)&endpoint_.sin6, sizeof(endpoint_.sin6), NULL, 0, NULL, &connect_overlapped_.overlapped)) {
+      int err = WSAGetLastError();
+      if (err != ERROR_IO_PENDING) {
+        RERROR("ConnectEx (IPv6) failed: %d", err);
+        CloseSocket();
+        return;
+      }
+    }
+  }
+  
   reads_active_ = 1;
 }
 
