@@ -790,7 +790,8 @@ bool TcpSocketListenerBsd::Initialize(int port) {
 
   CloseSocket();
 
-  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  // int fd = socket(AF_INET, SOCK_STREAM, 0);
+  int fd = socket(AF_INET6, SOCK_STREAM, 0);
   if (fd < 0) { RERROR("Error listen socket"); return false; }
   fcntl(fd, F_SETFD, FD_CLOEXEC);
   fcntl(fd, F_SETFL, O_NONBLOCK);
@@ -803,7 +804,14 @@ bool TcpSocketListenerBsd::Initialize(int port) {
   sin.sin_family = AF_INET;
   sin.sin_port = htons(port);
   sin.sin_addr.s_addr = INADDR_ANY;
-  if (bind(fd, (sockaddr*)&sin, sizeof(sin))) {
+
+  sockaddr_in6 sin6 = {0};
+  sin6.sin6_family = AF_INET6;
+  sin6.sin6_port   = htons(port);
+  sin6.sin6_addr   = in6addr_any;
+
+  // if (bind(fd, (sockaddr*)&sin, sizeof(sin))) {
+  if (bind(fd, (sockaddr*)&sin6, sizeof(sin6))) {
     RERROR("Error binding socket on port %d", port);
     close(fd);
     return false;
